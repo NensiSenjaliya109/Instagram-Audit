@@ -136,7 +136,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Webhook URL (edit here if needed) ─────────────────────────────────────────
-WEBHOOK_URL = "https://n8nnensi.app.n8n.cloud/webhook/instagram-audit"
+WEBHOOK_URL = "https://jenil01.app.n8n.cloud/webhook/instagram-audit"
 
 # ── Helper: call the n8n webhook ──────────────────────────────────────────────
 def run_audit(username: str) -> dict:

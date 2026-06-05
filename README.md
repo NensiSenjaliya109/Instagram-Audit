@@ -2,6 +2,8 @@
 
 Welcome to the **Instagram Influencer Audit** dashboard! This is a powerful, interactive web application built with Streamlit that allows you to instantly generate deep analytical audits for any public Instagram profile.
 
+🔗 **Live Website:** [nensi-instagram-audit.streamlit.app](https://nensi-instagram-audit.streamlit.app/)
+
 ## 🚀 Use Case
 This tool is designed for marketers, brand managers, and agencies who need to quickly evaluate an Instagram influencer before collaborating. It provides:
 - **Profile Summaries:** Follower/following ratios, verified status, and category.
@@ -62,5 +64,8 @@ The terminal will provide a local network URL. Your default web browser should a
 ---
 
 ## ☁️ Deployment
-This project is fully ready to be deployed for free on [Streamlit Community Cloud](https://share.streamlit.io/). 
+This project is deployed and running on [Streamlit Community Cloud](https://share.streamlit.io/).
+
+🔗 **Live Link:** [https://nensi-instagram-audit.streamlit.app/](https://nensi-instagram-audit.streamlit.app/)
+
 Simply push this repository to your GitHub account and connect it to Streamlit Cloud using `app.py` as your main file path!
