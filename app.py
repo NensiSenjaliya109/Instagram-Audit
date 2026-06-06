@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 import pandas as pd
 import io
@@ -12,16 +13,27 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Custom CSS (dark theme matching screenshots) ───────────────────────────────
+# ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
   /* ---------- global ---------- */
   [data-testid="stAppViewContainer"] {
-    background: #0d0f14;
+    background: #000000 !important;
     color: #ffffff;
   }
-  [data-testid="stHeader"] { background: #0d0f14; }
+  [data-testid="stAppViewContainer"] > .main {
+    background: transparent !important;
+  }
+  .main .block-container {
+    background: transparent !important;
+  }
+  [data-testid="stHeader"] {
+    background: rgba(0,0,0,0.8) !important;
+  }
   section[data-testid="stSidebar"] { display: none; }
+
+  /* hide iframe border for the starfield component */
+  iframe[title="st_component"] { display: none; }
 
   /* ---------- typography ---------- */
   h1 { font-size: 2.6rem !important; font-weight: 800 !important; color: #fff !important; }
@@ -31,7 +43,7 @@ st.markdown("""
 
   /* ---------- input ---------- */
   [data-testid="stTextInput"] input {
-    background: #1a1d26 !important;
+    background: rgba(26,29,38,0.85) !important;
     color: #ffffff !important;
     border: 1px solid #2a2d3a !important;
     border-radius: 8px !important;
@@ -69,7 +81,7 @@ st.markdown("""
 
   /* ---------- metric cards ---------- */
   [data-testid="metric-container"] {
-    background: #1a1d26 !important;
+    background: rgba(26,29,38,0.85) !important;
     border-radius: 10px !important;
     padding: 1rem !important;
     border: 1px solid #2a2d3a !important;
@@ -83,7 +95,7 @@ st.markdown("""
 
   /* ---------- dataframe ---------- */
   [data-testid="stDataFrame"] {
-    background: #1a1d26 !important;
+    background: rgba(26,29,38,0.85) !important;
     border-radius: 10px !important;
     border: 1px solid #2a2d3a !important;
   }
@@ -103,7 +115,7 @@ st.markdown("""
 
   /* ---------- expander ---------- */
   [data-testid="stExpander"] {
-    background: #1a1d26 !important;
+    background: rgba(26,29,38,0.85) !important;
     border: 1px solid #2a2d3a !important;
     border-radius: 8px !important;
     margin-bottom: 0.5rem !important;
@@ -112,7 +124,7 @@ st.markdown("""
 
   /* ---------- recommendation cards ---------- */
   .rec-card {
-    background: #1a2540;
+    background: rgba(26,37,64,0.85);
     border: 1px solid #243058;
     border-radius: 10px;
     padding: 1rem 1.2rem;
@@ -131,9 +143,97 @@ st.markdown("""
   [data-testid="stSpinner"] { color: #ff4d4d !important; }
 
   /* ---------- code blocks ---------- */
-  code { background: #1a1d26 !important; color: #ff8080 !important; border-radius: 4px; padding: 2px 6px; }
+  code { background: rgba(26,29,38,0.85) !important; color: #ff8080 !important; border-radius: 4px; padding: 2px 6px; }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Starfield: injected via components.html so JS actually executes ────────────
+# We escape into the PARENT document from the iframe to draw on the real page
+components.html("""
+<script>
+(function() {
+  // Walk up to the parent window (the actual Streamlit page)
+  var parentDoc = window.parent.document;
+
+  // Remove any previously injected canvas to avoid duplicates on re-runs
+  var old = parentDoc.getElementById('star-canvas-global');
+  if (old) old.remove();
+
+  // Create canvas and append to parent body
+  var canvas = parentDoc.createElement('canvas');
+  canvas.id = 'star-canvas-global';
+  canvas.style.cssText = [
+    'position:fixed',
+    'top:0','left:0',
+    'width:100vw','height:100vh',
+    'z-index:0',
+    'pointer-events:none',
+  ].join(';');
+  parentDoc.body.appendChild(canvas);
+
+  var ctx = canvas.getContext('2d');
+
+  var STAR_COUNT = 300;
+  var MAX_R      = 2.0;
+  var SPEED      = 0.015;
+  var stars      = [];
+  var W, H;
+
+  function resize() {
+    W = canvas.width  = window.parent.innerWidth;
+    H = canvas.height = window.parent.innerHeight;
+  }
+
+  function initStars() {
+    stars = [];
+    for (var i = 0; i < STAR_COUNT; i++) {
+      stars.push({
+        x:      Math.random() * W,
+        y:      Math.random() * H,
+        r:      Math.random() * MAX_R + 0.3,
+        dx:     (Math.random() - 0.5) * SPEED,
+        dy:     (Math.random() - 0.5) * SPEED,
+        alpha:  Math.random(),
+        dA:     (Math.random() * 0.02 + 0.008) * (Math.random() < 0.5 ? 1 : -1),
+      });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+
+      // twinkle
+      s.alpha += s.dA;
+      if (s.alpha > 1.0 || s.alpha < 0.0) s.dA *= -1;
+
+      // drift
+      s.x += s.dx;
+      s.y += s.dy;
+
+      // wrap
+      if (s.x < 0) s.x = W;
+      if (s.x > W) s.x = 0;
+      if (s.y < 0) s.y = H;
+      if (s.y > H) s.y = 0;
+
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,' + s.alpha.toFixed(3) + ')';
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  initStars();
+  draw();
+
+  window.parent.addEventListener('resize', function() { resize(); initStars(); });
+})();
+</script>
+""", height=0)
 
 # ── Webhook URL (edit here if needed) ─────────────────────────────────────────
 WEBHOOK_URL = "https://jenil01.app.n8n.cloud/webhook/instagram-audit"
@@ -150,58 +250,50 @@ def build_excel(data: dict, username: str) -> bytes:
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
 
-        # Sheet 1 – Profile Summary
         profile = data.get("report", {}).get("profile_summary", {})
         prof_df = pd.DataFrame([{
-            "username": profile.get("username", username),
-            "full_name": profile.get("full_name", ""),
-            "category": profile.get("category", ""),
-            "followers_count": profile.get("followers_count", ""),
-            "following_count": profile.get("following_count", ""),
-            "total_posts": profile.get("total_posts", ""),
-            "verified": profile.get("verified", ""),
-            "biography": profile.get("biography", ""),
+            "username":       profile.get("username", username),
+            "full_name":      profile.get("full_name", ""),
+            "category":       profile.get("category", ""),
+            "followers_count":profile.get("followers_count", ""),
+            "following_count":profile.get("following_count", ""),
+            "total_posts":    profile.get("total_posts", ""),
+            "verified":       profile.get("verified", ""),
+            "biography":      profile.get("biography", ""),
         }])
         prof_df.to_excel(writer, sheet_name="Profile Summary", index=False)
 
-        # Sheet 2 – Analytics
         analytics = data.get("report", {}).get("analytics", {})
         an_df = pd.DataFrame([{
-            "avg_likes": analytics.get("avg_likes", ""),
-            "avg_comments": analytics.get("avg_comments", ""),
-            "avg_views": analytics.get("avg_views", ""),
+            "avg_likes":           analytics.get("avg_likes", ""),
+            "avg_comments":        analytics.get("avg_comments", ""),
+            "avg_views":           analytics.get("avg_views", ""),
             "avg_engagement_rate": analytics.get("avg_engagement_rate", ""),
-            "total_posts_analyzed": analytics.get("total_posts", ""),
-            "total_views": analytics.get("total_views", ""),
-            "best_posting_day": analytics.get("best_posting_day", ""),
+            "total_posts_analyzed":analytics.get("total_posts", ""),
+            "total_views":         analytics.get("total_views", ""),
+            "best_posting_day":    analytics.get("best_posting_day", ""),
         }])
         an_df.to_excel(writer, sheet_name="Analytics", index=False)
 
-        # Sheet 3 – Recent Posts
         posts = data.get("report", {}).get("posts", [])
         if posts:
-            posts_df = pd.DataFrame(posts)
-            posts_df.to_excel(writer, sheet_name="Recent Posts", index=False)
+            pd.DataFrame(posts).to_excel(writer, sheet_name="Recent Posts", index=False)
 
-        # Sheet 4 – AI Recommendations
         recs = data.get("report", {}).get("recommendations", [])
         if recs:
-            rec_df = pd.DataFrame({"recommendation": recs})
-            rec_df.to_excel(writer, sheet_name="AI Recommendations", index=False)
+            pd.DataFrame({"recommendation": recs}).to_excel(writer, sheet_name="AI Recommendations", index=False)
 
-        # Sheet 5 – Top Performing
         top = data.get("report", {}).get("top_posts", [])
         if top:
             pd.DataFrame(top).to_excel(writer, sheet_name="Top Posts", index=False)
 
-        # Sheet 6 – Low Performing
         low = data.get("report", {}).get("low_posts", [])
         if low:
             pd.DataFrame(low).to_excel(writer, sheet_name="Low Posts", index=False)
 
     return output.getvalue()
 
-# ── Helper: bar chart (dark theme) ────────────────────────────────────────────
+# ── Helper: bar chart ──────────────────────────────────────────────────────────
 def dark_bar(x_vals, y_vals, title=""):
     fig = go.Figure(go.Bar(
         x=x_vals, y=y_vals,
@@ -211,8 +303,8 @@ def dark_bar(x_vals, y_vals, title=""):
     fig.update_layout(
         title=title,
         title_font_color="#fff",
-        paper_bgcolor="#0d0f14",
-        plot_bgcolor="#0d0f14",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,15,20,0.7)",
         font_color="#ccc",
         xaxis=dict(tickfont_color="#ccc", gridcolor="#1e2130", linecolor="#2a2d3a"),
         yaxis=dict(tickfont_color="#ccc", gridcolor="#1e2130", linecolor="#2a2d3a"),
@@ -241,7 +333,6 @@ profile_input = st.text_input(
 
 run_clicked = st.button("Run audit")
 
-# ── session state ─────────────────────────────────────────────────────────────
 if "audit_data" not in st.session_state:
     st.session_state.audit_data = None
 if "audit_username" not in st.session_state:
@@ -260,7 +351,6 @@ if run_clicked and profile_input.strip():
             st.error(f"Audit failed: {e.response.status_code} – {e.response.text[:300]}")
         except Exception as e:
             st.error(f"Error: {e}")
-
 elif run_clicked and not profile_input.strip():
     st.warning("Please enter a username or URL.")
 
@@ -271,179 +361,126 @@ data = st.session_state.audit_data
 
 if data:
     st.markdown("---")
-    report     = data.get("report", data)          # support both wrapped & flat
-    profile    = report.get("profile_summary", {})
-    analytics  = report.get("analytics", {})
-    posts      = report.get("posts", [])
-    top_posts  = report.get("top_posts", [])
-    low_posts  = report.get("low_posts", [])
-    recs       = report.get("recommendations", [])
-    ai_intel   = report.get("ai_intelligence", {})
+    report    = data.get("report", data)
+    profile   = report.get("profile_summary", {})
+    analytics = report.get("analytics", {})
+    posts     = report.get("posts", [])
+    top_posts = report.get("top_posts", [])
+    low_posts = report.get("low_posts", [])
+    recs      = report.get("recommendations", [])
+    ai_intel  = report.get("ai_intelligence", {})
 
     tab1, tab2, tab3 = st.tabs(["📊 Profile & Analytics", "📷 Recent Posts", "🤖 AI Intelligence"])
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # TAB 1 – Profile & Analytics
-    # ─────────────────────────────────────────────────────────────────────────
     with tab1:
         st.markdown("## Profile summary")
-        cols = ["username", "full_name", "category", "followers_count",
-                "following_count", "total_posts", "verified"]
-        prof_row = {c: profile.get(c, "—") for c in cols}
-        st.dataframe(pd.DataFrame([prof_row]), use_container_width=True, hide_index=True)
+        cols = ["username","full_name","category","followers_count","following_count","total_posts","verified"]
+        st.dataframe(pd.DataFrame([{c: profile.get(c,"—") for c in cols}]), use_container_width=True, hide_index=True)
 
-        bio = profile.get("biography", "")
-        if bio:
-            st.markdown(f"*{bio}*")
-        ext = profile.get("external_url", "")
-        if ext:
-            st.markdown(f"[{ext}]({ext})")
+        bio = profile.get("biography","")
+        if bio: st.markdown(f"*{bio}*")
+        ext = profile.get("external_url","")
+        if ext: st.markdown(f"[{ext}]({ext})")
 
         st.markdown("---")
         st.markdown("## Analytics")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Avg likes",       f"{analytics.get('avg_likes', '—'):,}" if isinstance(analytics.get('avg_likes'), (int, float)) else "—")
-        c2.metric("Avg comments",    f"{analytics.get('avg_comments', '—'):,}" if isinstance(analytics.get('avg_comments'), (int, float)) else "—")
-        c3.metric("Avg views",       f"{analytics.get('avg_views', '—'):,}" if isinstance(analytics.get('avg_views'), (int, float)) else "—")
-        c4.metric("Avg engagement",  f"{analytics.get('avg_engagement_rate', '—')}%" if analytics.get('avg_engagement_rate') else "—")
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Avg likes",      f"{analytics.get('avg_likes','—'):,}" if isinstance(analytics.get('avg_likes'),(int,float)) else "—")
+        c2.metric("Avg comments",   f"{analytics.get('avg_comments','—'):,}" if isinstance(analytics.get('avg_comments'),(int,float)) else "—")
+        c3.metric("Avg views",      f"{analytics.get('avg_views','—'):,}" if isinstance(analytics.get('avg_views'),(int,float)) else "—")
+        c4.metric("Avg engagement", f"{analytics.get('avg_engagement_rate','—')}%" if analytics.get('avg_engagement_rate') else "—")
 
         st.markdown("---")
         st.markdown("## Dashboard metrics")
-        d1, d2, d3 = st.columns(3)
-        d1.metric("Total posts",     analytics.get("total_posts", "—"))
-        d2.metric("Total views",     f"{analytics.get('total_views', 0):,}" if isinstance(analytics.get('total_views'), (int, float)) else "—")
-        d3.metric("Best posting day", analytics.get("best_posting_day", "—"))
+        d1,d2,d3 = st.columns(3)
+        d1.metric("Total posts",      analytics.get("total_posts","—"))
+        d2.metric("Total views",      f"{analytics.get('total_views',0):,}" if isinstance(analytics.get('total_views'),(int,float)) else "—")
+        d3.metric("Best posting day", analytics.get("best_posting_day","—"))
 
-        # Top / low performing post accordions
         st.markdown("---")
         st.markdown("## Top and low-performing posts")
         with st.expander("⭐ Top-performing posts"):
-            if top_posts:
-                st.dataframe(pd.DataFrame(top_posts), use_container_width=True, hide_index=True)
-            else:
-                st.info("No top-performing posts data available.")
-
+            if top_posts: st.dataframe(pd.DataFrame(top_posts), use_container_width=True, hide_index=True)
+            else: st.info("No top-performing posts data available.")
         with st.expander("📉 Low-performing posts"):
-            if low_posts:
-                st.dataframe(pd.DataFrame(low_posts), use_container_width=True, hide_index=True)
-            else:
-                st.info("No low-performing posts data available.")
+            if low_posts: st.dataframe(pd.DataFrame(low_posts), use_container_width=True, hide_index=True)
+            else: st.info("No low-performing posts data available.")
 
-        # Download
         st.markdown("---")
         excel_bytes = build_excel(data, st.session_state.audit_username)
-        fname = f"audit_{profile.get('username', 'report')}_{datetime.today().strftime('%Y%m%d')}.xlsx"
-        st.download_button(
-            label="📥  Download Audit Report (Excel)",
-            data=excel_bytes,
-            file_name=fname,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+        fname = f"audit_{profile.get('username','report')}_{datetime.today().strftime('%Y%m%d')}.xlsx"
+        st.download_button(label="📥  Download Audit Report (Excel)", data=excel_bytes, file_name=fname,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # TAB 2 – Recent Posts
-    # ─────────────────────────────────────────────────────────────────────────
     with tab2:
         st.markdown("## Recent posts")
         if posts:
             with st.expander("View all recent posts", expanded=True):
                 posts_df = pd.DataFrame(posts)
-                # rename cols for display
-                rename_map = {
-                    "shortcode": "shortcode", "type": "post_type",
-                    "likes": "likes", "comments": "comments",
-                    "views": "views", "engagement_rate": "engagement_rate",
-                    "performance_label": "performance_label", "timestamp": "timestamp",
-                }
-                display_cols = [c for c in rename_map.values() if c in posts_df.columns]
-                st.dataframe(posts_df[display_cols] if display_cols else posts_df,
-                             use_container_width=True, hide_index=True)
+                display_cols = [c for c in ["shortcode","post_type","likes","comments","views",
+                                            "engagement_rate","performance_label","timestamp"] if c in posts_df.columns]
+                st.dataframe(posts_df[display_cols] if display_cols else posts_df, use_container_width=True, hide_index=True)
         else:
             st.info("No recent posts data returned.")
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # TAB 3 – AI Intelligence
-    # ─────────────────────────────────────────────────────────────────────────
     with tab3:
         st.markdown("## Audit intelligence")
-        ai1, ai2, ai3, ai4 = st.columns(4)
-        ai1.metric("Total posts",    analytics.get("total_posts", "—"))
-        ai2.metric("Total views",    f"{analytics.get('total_views', 0):,}" if isinstance(analytics.get('total_views'), (int, float)) else "—")
-        ai3.metric("Avg views",      f"{analytics.get('avg_views', '—'):,}" if isinstance(analytics.get('avg_views'), (int, float)) else "—")
-        ai4.metric("Avg engagement", f"{analytics.get('avg_engagement_rate', '—')}%" if analytics.get('avg_engagement_rate') else "—")
+        ai1,ai2,ai3,ai4 = st.columns(4)
+        ai1.metric("Total posts",    analytics.get("total_posts","—"))
+        ai2.metric("Total views",    f"{analytics.get('total_views',0):,}" if isinstance(analytics.get('total_views'),(int,float)) else "—")
+        ai3.metric("Avg views",      f"{analytics.get('avg_views','—'):,}" if isinstance(analytics.get('avg_views'),(int,float)) else "—")
+        ai4.metric("Avg engagement", f"{analytics.get('avg_engagement_rate','—')}%" if analytics.get('avg_engagement_rate') else "—")
 
         st.markdown("---")
-        # Top 3 / Bottom 3
-        tc, bc = st.columns(2)
+        tc,bc = st.columns(2)
         with tc:
             st.markdown("**Top 3 performing posts**")
             if top_posts:
                 t_df = pd.DataFrame(top_posts[:3])
                 cols_show = [c for c in ["shortcode","post_type","engagement_rate","content_type"] if c in t_df.columns]
                 st.dataframe(t_df[cols_show] if cols_show else t_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No data")
+            else: st.info("No data")
         with bc:
             st.markdown("**Bottom 3 performing posts**")
             if low_posts:
                 b_df = pd.DataFrame(low_posts[:3])
                 cols_show = [c for c in ["shortcode","post_type","engagement_rate","content_type"] if c in b_df.columns]
                 st.dataframe(b_df[cols_show] if cols_show else b_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No data")
+            else: st.info("No data")
 
-        # Posting day chart
-        post_by_day = analytics.get("posts_by_day", {})
+        post_by_day = analytics.get("posts_by_day",{})
         if post_by_day:
             st.markdown("---")
-            best_day  = analytics.get("best_posting_day", "")
-            worst_day = analytics.get("worst_posting_day", "")
-            st.markdown(f"**Best day:** {best_day} &nbsp;|&nbsp; **Worst day:** {worst_day}", unsafe_allow_html=True)
-            days = list(post_by_day.keys())
+            st.markdown(f"**Best day:** {analytics.get('best_posting_day','')} &nbsp;|&nbsp; **Worst day:** {analytics.get('worst_posting_day','')}", unsafe_allow_html=True)
+            days   = list(post_by_day.keys())
             counts = [post_by_day[d] for d in days]
             st.plotly_chart(dark_bar(days, counts), use_container_width=True)
 
-        # Content classification & hook analysis (side by side)
-        content_class = analytics.get("content_classification", {})
-        hook_analysis = analytics.get("hook_analysis", {})
+        content_class = analytics.get("content_classification",{})
+        hook_analysis = analytics.get("hook_analysis",{})
         if content_class or hook_analysis:
             cc_col, ha_col = st.columns(2)
             with cc_col:
                 st.markdown("**Content classification**")
-                if content_class:
-                    st.plotly_chart(dark_bar(list(content_class.keys()), list(content_class.values())), use_container_width=True)
-                else:
-                    st.info("No content classification data.")
+                if content_class: st.plotly_chart(dark_bar(list(content_class.keys()), list(content_class.values())), use_container_width=True)
+                else: st.info("No content classification data.")
             with ha_col:
                 st.markdown("**Hook analysis**")
-                if hook_analysis:
-                    st.plotly_chart(dark_bar(list(hook_analysis.keys()), list(hook_analysis.values())), use_container_width=True)
-                else:
-                    st.info("No hook analysis data.")
+                if hook_analysis: st.plotly_chart(dark_bar(list(hook_analysis.keys()), list(hook_analysis.values())), use_container_width=True)
+                else: st.info("No hook analysis data.")
 
-        # AI recommendations
         st.markdown("---")
         st.markdown("### 📈 Baseline Business Recommendations")
         if recs:
             for rec in recs:
-                st.markdown(f"""
-                <div class="rec-card">
-                  <span style="font-size:1.3rem">💡</span>
-                  <span>{rec}</span>
-                </div>""", unsafe_allow_html=True)
+                st.markdown(f'<div class="rec-card"><span style="font-size:1.3rem">💡</span><span>{rec}</span></div>', unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div class="rec-card" style="color:#6b7fa8;font-style:italic;">
-              AI outputs are unavailable for this run, so only numeric analytics are shown.
-            </div>""", unsafe_allow_html=True)
+            st.markdown('<div class="rec-card" style="color:#6b7fa8;font-style:italic;">AI outputs are unavailable for this run, so only numeric analytics are shown.</div>', unsafe_allow_html=True)
 
-        # Full AI intelligence block (if present)
         if ai_intel:
             st.markdown("---")
             st.markdown("### Full AI Analysis")
             for section, content in ai_intel.items():
-                with st.expander(section.replace("_", " ").title()):
-                    if isinstance(content, dict):
-                        st.json(content)
-                    else:
-                        st.write(content)
+                with st.expander(section.replace("_"," ").title()):
+                    if isinstance(content, dict): st.json(content)
+                    else: st.write(content)
